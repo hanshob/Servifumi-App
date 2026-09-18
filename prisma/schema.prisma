@@ -1,0 +1,195 @@
+generator client {
+    provider = "prisma-client-js"
+    binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x"]
+    output = "/home/ubuntu/servifumi_app/nextjs_space/node_modules/.prisma/client"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+// ============ TABLE 1: CLIENTES ============
+model Cliente {
+  id                            Int      @id @default(autoincrement())
+  nombre                        String
+  tipo_cliente                  String   @default("Comercial") // Residencial/Comercial/Industrial/Gobierno
+  zona                          String   @default("") // Distrito Nacional/Santo Domingo Este/Oeste/Norte/Interior
+  estado                        String   @default("Activo") // Activo/Inactivo
+  direccion                     String   @default("")
+  telefono                      String   @default("")
+  telefono_alterno              String   @default("")
+  email                         String   @default("")
+  nombre_contacto_principal     String   @default("")
+  telefono_contacto_principal   String   @default("")
+  google_maps_url               String   @default("")
+  notas                         String   @default("")
+  created_at                    DateTime @default(now())
+  updated_at                    DateTime @updatedAt
+
+  contratos      Contrato[]
+  programaciones Programacion[]
+
+  @@index([nombre])
+  @@index([estado])
+  @@index([zona])
+}
+
+// ============ TABLE 2: CONTRATOS DE SERVICIO ============
+model Contrato {
+  id                 Int      @id @default(autoincrement())
+  cliente_id         Int
+  tipo_servicio_id   Int
+  frecuencia         String   // Única/Semanal/Quincenal/Mensual/Bimestral/Trimestral/Semestral/Anual
+  semanas_quincenal  String   @default("1_3") // "1_3" or "2_4"
+  dia_preferido      String   // Lunes-Domingo
+  hora_por_defecto   String   @default("08:00") // HH:mm
+  turno_por_defecto  String   @default("Matutino") // Matutino/Nocturno/Interior
+  vehiculo_por_defecto_id Int?
+  estado             String   @default("Activo") // Activo/Pausado/Finalizado
+  fecha_inicio       DateTime @default(now())
+  notas              String   @default("")
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  cliente        Cliente       @relation(fields: [cliente_id], references: [id])
+  tipo_servicio  TipoServicio  @relation(fields: [tipo_servicio_id], references: [id])
+  vehiculo       Vehiculo?     @relation(fields: [vehiculo_por_defecto_id], references: [id])
+  tecnicos       Personal[]    @relation("ContratoTecnicos")
+  programaciones Programacion[]
+
+  @@index([cliente_id])
+  @@index([estado])
+}
+
+// ============ TABLE 3: PROGRAMACIÓN DE SERVICIOS ============
+model Programacion {
+  id                        Int      @id @default(autoincrement())
+  origen                    String   @default("Único") // Recurrente/Único
+  contrato_id               Int?
+  cliente_id                Int
+  fecha_hora                DateTime
+  dia_semana                String   @default("")
+  turno                     String   @default("Matutino") // Matutino/Nocturno/Interior
+  vehiculo_id               Int?
+  estado                    String   @default("Programado") // Programado/Confirmado/Completado/Cancelado
+  requiere_cambio_estaciones Boolean @default(false)
+  observaciones             String   @default("")
+  direccion                 String   @default("")
+  nombre_contacto_principal String   @default("")
+  manually_modified         Boolean  @default(false)
+  created_at                DateTime @default(now())
+  updated_at                DateTime @updatedAt
+
+  cliente        Cliente        @relation(fields: [cliente_id], references: [id])
+  contrato       Contrato?      @relation(fields: [contrato_id], references: [id])
+  vehiculo       Vehiculo?      @relation(fields: [vehiculo_id], references: [id])
+  tecnicos       Personal[]     @relation("ProgramacionTecnicos")
+  tipos_servicio TipoServicio[] @relation("ProgramacionTipos")
+  conduces       Conduce[]
+
+  @@index([fecha_hora])
+  @@index([cliente_id])
+  @@index([contrato_id])
+  @@index([estado])
+  @@index([origen])
+}
+
+// ============ TABLE 4: CONDUCES ============
+model Conduce {
+  conduce_numero        Int      @id
+  programacion_id       Int?
+  empresa               String   @default("")
+  detalles_observaciones String  @default("")
+  registrado_por_id     Int?
+  fecha_registro        DateTime @default(now())
+  importado             Boolean  @default(false)
+  created_at            DateTime @default(now())
+
+  programacion   Programacion?  @relation(fields: [programacion_id], references: [id])
+  registrado_por Usuario?       @relation(fields: [registrado_por_id], references: [id])
+  tecnicos       Personal[]     @relation("ConduceTecnicos")
+  tipos_servicio TipoServicio[] @relation("ConduceTipos")
+
+  @@index([programacion_id])
+  @@index([fecha_registro])
+  @@index([empresa])
+}
+
+// ============ TABLE 5: PERSONAL ============
+model Personal {
+  id                       String   @id // ADM001/TEC001/SUP001
+  nombre_completo          String
+  puesto                   String   // Administración/Técnico/Supervisor
+  telefono                 String   @default("")
+  cedula                   String   @default("")
+  fecha_expiracion_licencia DateTime?
+  estado                   String   @default("Activo") // Activo/Inactivo
+  created_at               DateTime @default(now())
+  updated_at               DateTime @updatedAt
+
+  contratos      Contrato[]     @relation("ContratoTecnicos")
+  programaciones Programacion[] @relation("ProgramacionTecnicos")
+  conduces       Conduce[]      @relation("ConduceTecnicos")
+  usuarios       Usuario[]
+
+  @@index([puesto])
+  @@index([estado])
+}
+
+// ============ TABLE 6: VEHÍCULOS ============
+model Vehiculo {
+  id            Int      @id @default(autoincrement())
+  identificador String   @unique // F-1, F-2...
+  apodo         String   @default("")
+  placa         String   @default("")
+  marca         String   @default("")
+  estado        String   @default("Disponible") // Disponible/Mantenimiento/Inactivo
+  notas         String   @default("")
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  contratos      Contrato[]
+  programaciones Programacion[]
+}
+
+// ============ TABLE 7: TIPOS DE SERVICIO ============
+model TipoServicio {
+  id         Int      @id @default(autoincrement())
+  nombre     String   @unique
+  estado     String   @default("Activo") // Activo/Inactivo
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  contratos      Contrato[]
+  programaciones Programacion[] @relation("ProgramacionTipos")
+  conduces       Conduce[]      @relation("ConduceTipos")
+}
+
+// ============ TABLE 8: USUARIOS ============
+model Usuario {
+  id                   Int      @id @default(autoincrement())
+  nombre_completo      String
+  username             String   @unique
+  password_hash        String
+  rol                  String   // Gerente General / Administración / Supervisor
+  estado               String   @default("Activo") // Activo/Inactivo
+  personal_vinculado_id String?
+  must_change_password Boolean  @default(true)
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+
+  personal_vinculado Personal?  @relation(fields: [personal_vinculado_id], references: [id])
+  conduces           Conduce[]
+
+  @@index([username])
+  @@index([estado])
+}
+
+// ============ EMERGENCY / AUDIT LOG ============
+model EmergencyLog {
+  id         Int      @id @default(autoincrement())
+  accion     String
+  detalle    String   @default("")
+  created_at DateTime @default(now())
+}
